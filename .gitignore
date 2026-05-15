@@ -1,0 +1,29 @@
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller 构建产物
+dist/
+build/
+*.spec
+
+# 配置文件（含 API 密钥）
+config.json
+
+# 扫描记录
+scan_record.json
+
+# 临时图片目录
+_temp_images/
+
+# Excel 备份
+_excel_backup/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
