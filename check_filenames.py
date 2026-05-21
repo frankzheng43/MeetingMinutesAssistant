@@ -22,7 +22,7 @@ MEETING_TYPE_KEYWORDS = {
     "总经办": ["总经办", "总经理"],
 }
 
-RECORD_PATTERN = re.compile(r'^(.+?)[〔【\[（(]\s*(\d{4})\s*[〕】\]））]\s*(\d+)\s*号$')
+RECORD_PATTERN = re.compile(r'^(.+?)[〔【\[（(]\s*(\d{4})\s*[〕】\]））]\s*(第)?\s*(\d+)\s*(号|期)$')
 
 BRACKET_MAP = str.maketrans({
     '【': '〔', '】': '〕',
@@ -53,7 +53,11 @@ def extract_record_number(filename: str):
     name_no_ext = os.path.splitext(filename)[0]
     match = RECORD_PATTERN.match(name_no_ext)
     if match:
-        return f"{match.group(1)}〔{match.group(2)}〕{match.group(3)}号"
+        prefix = match.group(1)
+        year = match.group(2)
+        number = match.group(4)   # 跳过第3组"第"
+        suffix = match.group(5)   # 号 或 期
+        return f"{prefix}〔{year}〕{number}{suffix}"
     return None
 
 
