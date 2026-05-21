@@ -6,7 +6,15 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('meeting_minutes_tool\\icon.ico', '.')],
-    hiddenimports=['export_view', 'heatmap_view', 'statistics_view', 'watcher', 'excel_utils', 'llm_utils', 'ocr_utils'],
+    hiddenimports=[
+        # 应用模块
+        'export_view', 'heatmap_view', 'statistics_view',
+        'watcher', 'excel_utils', 'llm_utils', 'ocr_utils',
+        # PIL/Pillow（C扩展，需显式声明）
+        'PIL', 'PIL._imagingtk', 'PIL.ImageTk', 'PIL.ImageDraw',
+        # 系统托盘（可选）
+        'pystray',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
