@@ -155,7 +155,11 @@ class Application:
         self.tab_statistics = tk.Frame(self.notebook)
         self.notebook.add(self.tab_statistics, text="  📈 统计页 ")
 
-        # ---- 标签页3: 配置页 ----
+        # ---- 标签页3: 导出页 ----
+        self.tab_export = tk.Frame(self.notebook)
+        self.notebook.add(self.tab_export, text="  📤 导出页 ")
+
+        # ---- 标签页4: 配置页 ----
         self.tab_monitor = tk.Frame(self.notebook)
         self.notebook.add(self.tab_monitor, text="  ⚙️ 配置页 ")
 
@@ -164,6 +168,9 @@ class Application:
 
         # ========== 构建统计视图标签页 ==========
         self._build_statistics_tab()
+
+        # ========== 构建导出标签页 ==========
+        self._build_export_tab()
 
         # ========== 构建监控管理标签页 ==========
         self._build_monitor_tab()
@@ -350,6 +357,16 @@ class Application:
             config_callback=lambda: self.config
         )
         self.statistics_view.pack(fill=tk.BOTH, expand=True)
+
+    def _build_export_tab(self):
+        """构建导出标签页"""
+        from export_view import ExportView
+
+        self.export_view = ExportView(
+            self.tab_export,
+            config_callback=lambda: self.config
+        )
+        self.export_view.pack(fill=tk.BOTH, expand=True)
 
     def _setup_logging(self):
         """设置日志系统，添加 GUI 日志处理器"""
