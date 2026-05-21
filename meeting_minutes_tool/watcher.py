@@ -165,12 +165,13 @@ def rename_all_pdfs(watch_folder: str, log_func=None) -> dict:
     :return: {重命名后的相对路径: {file_path, mtime, meeting_type, year}}
     """
     def log(message: str, level: str = "info"):
-        if level == "info":
-            logger.info(message)
-        elif level == "error":
-            logger.error(message)
         if log_func:
             log_func(message)
+        else:
+            if level == "info":
+                logger.info(message)
+            elif level == "error":
+                logger.error(message)
 
     watch_folder = os.path.normpath(watch_folder)
     result = {}
@@ -224,7 +225,7 @@ def load_scan_record(watch_folder: str) -> dict:
     :param watch_folder: 监听根目录
     :return: 记录字典
     """
-    record_path = os.path.join(watch_folder, SCAN_RECORD_FILE)
+    record_path = os.path.normpath(os.path.join(watch_folder, SCAN_RECORD_FILE))
     if os.path.exists(record_path):
         try:
             with open(record_path, "r", encoding="utf-8") as f:
@@ -241,7 +242,7 @@ def save_scan_record(watch_folder: str, record: dict):
     :param watch_folder: 监听根目录
     :param record: 记录字典
     """
-    record_path = os.path.join(watch_folder, SCAN_RECORD_FILE)
+    record_path = os.path.normpath(os.path.join(watch_folder, SCAN_RECORD_FILE))
     try:
         with open(record_path, "w", encoding="utf-8") as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
@@ -257,7 +258,7 @@ def _get_cache_paths(watch_folder: str, pdf_rel_path: str) -> dict:
     :param pdf_rel_path: PDF 文件的相对路径（如 "2026/党委会/党委会〔2026〕4号.pdf"）
     :return: {"md5": ..., "ocr": ..., "result": ...}
     """
-    cache_dir = os.path.join(watch_folder, CACHE_DIR)
+    cache_dir = os.path.normpath(os.path.join(watch_folder, CACHE_DIR))
     # 保持相同的子目录结构
     rel_dir = os.path.dirname(pdf_rel_path)
     base_name = os.path.basename(pdf_rel_path)
@@ -484,14 +485,15 @@ def process_single_pdf(pdf_path: str, config: dict, ocr_client, log_func,
     from llm_utils import extract_minutes
 
     def log(message: str, level: str = "info"):
-        if level == "info":
-            logger.info(message)
-        elif level == "error":
-            logger.error(message)
-        elif level == "warning":
-            logger.warning(message)
         if log_func:
             log_func(message)
+        else:
+            if level == "info":
+                logger.info(message)
+            elif level == "error":
+                logger.error(message)
+            elif level == "warning":
+                logger.warning(message)
 
     deepseek_key = config.get("deepseek_key", "")
     image_paths = []
@@ -635,14 +637,15 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
     from llm_utils import extract_minutes
 
     def log(message: str, level: str = "info"):
-        if level == "info":
-            logger.info(message)
-        elif level == "error":
-            logger.error(message)
-        elif level == "warning":
-            logger.warning(message)
         if log_func:
             log_func(message)
+        else:
+            if level == "info":
+                logger.info(message)
+            elif level == "error":
+                logger.error(message)
+            elif level == "warning":
+                logger.warning(message)
 
     def should_stop() -> bool:
         """检查是否需要停止"""
@@ -740,13 +743,24 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
         if rel_path not in current_files:
             deleted_files[rel_path] = info
 
-    # 处理修改的文件（同名替换）：先删旧 Excel 记录，再重新处理
+    # 处理修改的文件（同名替换）：先判断内容是否真正变化，再决定是否重新处理
     if modified_files:
-        log(f"发现 {len(modified_files)} 个修改的文件（同名替换），将重新处理...")
+        actual_changed = 0
+        skipped_md5 = 0
         for rel_path, info in sorted(modified_files.items()):
             if should_stop():
                 log("全量扫描被中断")
                 return
+
+            # 检查 MD5 缓存：如果文件内容未变，跳过重新处理
+            cache_paths = _get_cache_paths(watch_folder, rel_path)
+            cached_md5 = _load_cache_md5(cache_paths)
+            current_md5 = _compute_file_md5(info["file_path"])
+            if cached_md5 and cached_md5 == current_md5:
+                log(f"文件内容未变化（MD5 相同），跳过重新处理: {rel_path}")
+                skipped_md5 += 1
+                continue
+
             meeting_type_name = info["meeting_type"]
             source_file = os.path.basename(rel_path)
 
@@ -754,7 +768,7 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
                 log(f"无法检测会议类型，跳过: {rel_path}", "warning")
                 continue
 
-            log(f"文件已修改（同名替换），重新处理: {rel_path}")
+            log(f"文件内容已变化（替换），重新处理: {rel_path}")
 
             # 先删除旧的 Excel 记录
             _delete_excel_with_retry(
@@ -765,7 +779,6 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
             )
 
             # 删除旧缓存（强制重新处理）
-            cache_paths = _get_cache_paths(watch_folder, rel_path)
             _delete_cache(cache_paths)
 
             # 重新处理 PDF
@@ -781,8 +794,12 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
 
             if success:
                 log(f"修改文件重新处理完成: {rel_path}")
+                actual_changed += 1
             else:
                 log(f"修改文件重新处理失败: {rel_path}", "error")
+
+        if skipped_md5 > 0:
+            log(f"修改文件中 {skipped_md5} 个内容未变（MD5 相同），已跳过")
 
     if should_stop():
         log("全量扫描被中断")
@@ -883,14 +900,15 @@ def worker_loop(job_queue: queue.Queue, config: dict, log_func=None,
     from ocr_utils import BaiduOCR
 
     def log(message: str, level: str = "info"):
-        if level == "info":
-            logger.info(message)
-        elif level == "error":
-            logger.error(message)
-        elif level == "warning":
-            logger.warning(message)
         if log_func:
             log_func(message)
+        else:
+            if level == "info":
+                logger.info(message)
+            elif level == "error":
+                logger.error(message)
+            elif level == "warning":
+                logger.warning(message)
 
     # 读取配置
     api_key = config.get("api_key", "")
@@ -911,7 +929,7 @@ def worker_loop(job_queue: queue.Queue, config: dict, log_func=None,
         return
 
     # 创建临时图片输出目录
-    temp_image_dir = os.path.join(watch_folder, "_temp_images")
+    temp_image_dir = os.path.normpath(os.path.join(watch_folder, "_temp_images"))
     os.makedirs(temp_image_dir, exist_ok=True)
 
     # ===== 启动时全量扫描 =====

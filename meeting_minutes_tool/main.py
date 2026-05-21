@@ -8,9 +8,11 @@ import json
 import logging
 import os
 import sys
+import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageTk
 
 # 配置日志 - 文件日志
 logging.basicConfig(
@@ -29,14 +31,27 @@ if os.path.dirname(os.path.abspath(__file__)) == _INSTALLED_PATH or \
    os.path.dirname(os.path.abspath(sys.argv[0])) == "/usr/bin":
     # deb 包安装模式：配置文件保存在 ~/.config/meeting-minutes-tool/
     CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "meeting-minutes-tool")
+elif hasattr(sys, 'frozen') and getattr(sys, 'frozen', False):
+    # PyInstaller 打包的 EXE 模式：配置文件保存在 EXE 同目录
+    CONFIG_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    # 开发模式：配置文件保存在当前目录
-    CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+    # 开发模式：配置文件保存在主程序根目录
+    CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 确保配置目录存在
 os.makedirs(CONFIG_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+# 系统托盘相关
+_HAS_TRAY = False
+try:
+    import pystray
+    from PIL import Image, ImageDraw
+    _HAS_TRAY = True
+except ImportError:
+    logger.warning("pystray 未安装，系统托盘功能不可用")
+    _HAS_TRAY = False
 
 
 class TextHandler(logging.Handler):
@@ -87,11 +102,18 @@ class Application:
         self.root.geometry("800x650")
         self.root.resizable(True, True)
 
+        # 生成并设置窗口图标
+        self._set_window_icon()
+
         # 监控服务实例
         self.watcher_service = None
 
         # 配置数据
         self.config = {}
+
+        # 系统托盘相关
+        self.tray_icon = None
+        self.tray_thread = None
 
         # 加载配置
         self.load_config()
@@ -99,13 +121,59 @@ class Application:
         # 创建界面
         self._create_widgets()
 
-        # 设置窗口关闭事件处理
-        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+    def _set_window_icon(self):
+        """设置程序窗口图标（使用 icon.ico）"""
+        try:
+            ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+            if os.path.exists(ico_path):
+                # 1. iconbitmap 设置标题栏图标（Windows 桌面）
+                self.root.iconbitmap(default=ico_path)
+
+                # 2. iconphoto 设置任务栏图标
+                img = Image.open(ico_path)
+                photo = ImageTk.PhotoImage(img)
+                self.root.iconphoto(True, photo)
+                self._icon_photo = photo  # 保持引用
+
+                logger.info("窗口图标已设置")
+            else:
+                logger.warning(f"图标文件不存在: {ico_path}")
+        except Exception as e:
+            logger.warning(f"设置窗口图标失败: {e}")
 
     def _create_widgets(self):
         """创建界面组件"""
-        # 主框架
-        main_frame = tk.Frame(self.root, padx=15, pady=15)
+        # ========== 创建标签页 ==========
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # ---- 标签页1: 热力图 ----
+        self.tab_heatmap = tk.Frame(self.notebook)
+        self.notebook.add(self.tab_heatmap, text="  📊 热力图 ")
+
+        # ---- 标签页2: 统计页 ----
+        self.tab_statistics = tk.Frame(self.notebook)
+        self.notebook.add(self.tab_statistics, text="  📈 统计页 ")
+
+        # ---- 标签页3: 配置页 ----
+        self.tab_monitor = tk.Frame(self.notebook)
+        self.notebook.add(self.tab_monitor, text="  ⚙️ 配置页 ")
+
+        # ========== 构建热力图标签页 ==========
+        self._build_heatmap_tab()
+
+        # ========== 构建统计视图标签页 ==========
+        self._build_statistics_tab()
+
+        # ========== 构建监控管理标签页 ==========
+        self._build_monitor_tab()
+
+        # 设置窗口关闭事件处理（最小化到托盘）
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    def _build_monitor_tab(self):
+        """构建监控管理标签页"""
+        main_frame = tk.Frame(self.tab_monitor, padx=15, pady=15)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # ========== 配置区域 ==========
@@ -196,6 +264,22 @@ class Application:
         )
         self.save_btn.pack(side=tk.LEFT, padx=(0, 5))
 
+        self.import_btn = tk.Button(
+            button_frame,
+            text="导入配置",
+            command=self._import_config,
+            width=10,
+        )
+        self.import_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.export_btn = tk.Button(
+            button_frame,
+            text="导出配置",
+            command=self._export_config,
+            width=10,
+        )
+        self.export_btn.pack(side=tk.LEFT, padx=(0, 5))
+
         self.start_btn = tk.Button(
             button_frame,
             text="开始监听",
@@ -247,6 +331,26 @@ class Application:
         # 添加自定义日志处理器
         self._setup_logging()
 
+    def _build_heatmap_tab(self):
+        """构建热力图标签页"""
+        from heatmap_view import HeatmapView
+
+        self.heatmap_view = HeatmapView(
+            self.tab_heatmap,
+            config_callback=lambda: self.config
+        )
+        self.heatmap_view.pack(fill=tk.BOTH, expand=True)
+
+    def _build_statistics_tab(self):
+        """构建统计视图标签页"""
+        from statistics_view import StatisticsView
+
+        self.statistics_view = StatisticsView(
+            self.tab_statistics,
+            config_callback=lambda: self.config
+        )
+        self.statistics_view.pack(fill=tk.BOTH, expand=True)
+
     def _setup_logging(self):
         """设置日志系统，添加 GUI 日志处理器"""
         text_handler = TextHandler(self.log_text)
@@ -280,6 +384,12 @@ class Application:
         """保存配置到文件"""
         try:
             config = self._get_config_from_ui()
+            # 保存统计视图的"统计页数"复选框状态
+            if hasattr(self, 'statistics_view'):
+                config["count_pages"] = self.statistics_view.get_count_pages_state()
+            else:
+                config["count_pages"] = True
+
             config_dir = os.path.dirname(os.path.abspath(CONFIG_FILE))
             if config_dir and not os.path.exists(config_dir):
                 os.makedirs(config_dir, exist_ok=True)
@@ -293,6 +403,61 @@ class Application:
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
             messagebox.showerror("错误", f"保存配置失败：{e}")
+
+    def _import_config(self):
+        """从文件导入配置"""
+        try:
+            file_path = filedialog.askopenfilename(
+                title="选择配置文件",
+                filetypes=[("JSON 配置文件", "*.json"), ("所有文件", "*.*")]
+            )
+            if not file_path:
+                return
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                imported_config = json.load(f)
+
+            # 回填到界面
+            self.folder_var.set(imported_config.get("watch_folder", ""))
+            self.output_var.set(imported_config.get("output_dir", ""))
+            self.ak_var.set(imported_config.get("api_key", ""))
+            self.sk_var.set(imported_config.get("secret_key", ""))
+            self.ds_var.set(imported_config.get("deepseek_key", ""))
+
+            # 更新内存配置
+            self.config = imported_config
+
+            logger.info(f"配置已从 {file_path} 导入")
+            messagebox.showinfo("提示", "配置导入成功！请检查各项配置是否正确，然后点击「保存配置」持久化。")
+        except Exception as e:
+            logger.error(f"导入配置失败: {e}")
+            messagebox.showerror("错误", f"导入配置失败：{e}")
+
+    def _export_config(self):
+        """导出配置到文件"""
+        try:
+            config = self._get_config_from_ui()
+            if not any(config.values()):
+                messagebox.showwarning("提示", "当前配置为空，请先填写配置信息。")
+                return
+
+            file_path = filedialog.asksaveasfilename(
+                title="导出配置文件",
+                defaultextension=".json",
+                filetypes=[("JSON 配置文件", "*.json"), ("所有文件", "*.*")],
+                initialfile="config.json"
+            )
+            if not file_path:
+                return
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"配置已导出到 {file_path}")
+            messagebox.showinfo("提示", f"配置已导出到：\n{file_path}")
+        except Exception as e:
+            logger.error(f"导出配置失败: {e}")
+            messagebox.showerror("错误", f"导出配置失败：{e}")
 
     def load_config(self):
         """从文件加载配置"""
@@ -390,9 +555,96 @@ class Application:
                 logger.error(f"停止监控服务失败: {e}")
                 messagebox.showerror("错误", f"停止监控服务失败：{e}")
 
+    # ========== 系统托盘相关方法 ==========
+
+    def _create_tray_icon(self):
+        """创建系统托盘图标（使用 icon.ico，在后台线程中运行）"""
+        if not _HAS_TRAY:
+            return
+
+        # 从 .ico 文件加载图片作为托盘图标
+        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+        if os.path.exists(ico_path):
+            image = Image.open(ico_path)
+        else:
+            # 如果 .ico 不存在，回退生成一个简单图标
+            image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.ellipse([4, 4, 60, 60], fill="#4472C4")
+
+        # 创建菜单
+        menu = pystray.Menu(
+            pystray.MenuItem("显示主窗口", self._show_window, default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("退出程序", self._quit_app),
+        )
+
+        self.tray_icon = pystray.Icon(
+            "meeting_minutes_tool",
+            image,
+            "会议纪要助手",
+            menu,
+        )
+
+        # 运行托盘（阻塞，在独立线程中）
+        self.tray_icon.run()
+
+    def _show_window(self):
+        """显示主窗口（从托盘恢复）"""
+        self.root.after(0, self._restore_window)
+
+    def _restore_window(self):
+        """恢复窗口显示"""
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def _hide_to_tray(self):
+        """隐藏到系统托盘"""
+        if not _HAS_TRAY:
+            # 如果没有托盘支持，直接退出
+            self._force_quit()
+            return
+
+        # 隐藏窗口
+        self.root.withdraw()
+
+        # 如果托盘图标未创建，在后台线程中创建
+        if self.tray_icon is None:
+            self.tray_thread = threading.Thread(target=self._create_tray_icon, daemon=True)
+            self.tray_thread.start()
+        else:
+            # 托盘已在运行，只需确保图标可见
+            try:
+                self.tray_icon.visible = True
+            except Exception:
+                pass
+
     def _on_closing(self):
-        """窗口关闭事件处理 - 直接强制退出，不等待任何线程"""
+        """点击关闭按钮事件 - 最小化到系统托盘"""
+        self._hide_to_tray()
+
+    def _quit_app(self):
+        """从托盘菜单选择退出时调用"""
+        logger.info("用户通过托盘菜单选择退出程序...")
+        self.root.after(0, self._force_quit)
+
+    def _force_quit(self):
+        """强制退出程序"""
         import sys
+        # 停止托盘图标
+        if self.tray_icon is not None:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+        # 停止监控
+        if self.watcher_service:
+            try:
+                self.watcher_service.stop()
+            except Exception:
+                pass
+        # 强制退出
         try:
             sys.stdout.flush()
         except Exception:
@@ -402,7 +654,6 @@ class Application:
         except Exception:
             pass
         os._exit(0)
-
 
 
 def main():
