@@ -133,22 +133,26 @@ def extract_record_number_from_filename(filename: str) -> str:
     - 党委会【2026】4号.pdf
     - 董事会[2026]4号.pdf
     - 总经办（2026）4号.pdf
+    - 党委会〔2018〕9期.pdf           （期 = 号）
+    - 总经办〔2021〕第10期.pdf         （自动去掉"第"）
 
     :param filename: 文件名（不含路径）
-    :return: 纪要编号，如 "党委会〔2026〕4号"
+    :return: 纪要编号，如 "党委会〔2026〕4号" 或 "党委会〔2018〕9期"
     """
     # 去掉扩展名
     name_no_ext = os.path.splitext(filename)[0]
 
-    # 匹配模式：会议类型 + 括号 + 年份 + 括号 + 序号 + 号
+    # 匹配模式：会议类型 + 括号 + 年份 + 括号 + 可选"第" + 序号 + 号/期
     # 支持各种括号：〔〕【】[]（）()
-    pattern = r'^(.+?)[〔【\[（(]\s*(\d{4})\s*[〕】\]）)]\s*(\d+)\s*号$'
+    # 期和号视为等价
+    pattern = r'^(.+?)[〔【\[（(]\s*(\d{4})\s*[〕】\]）)]\s*(第)?\s*(\d+)\s*(号|期)$'
     match = re.match(pattern, name_no_ext)
     if match:
         prefix = match.group(1)  # 党委会/董事会/总经办
         year = match.group(2)    # 2026
-        number = match.group(3)  # 4
-        return f"{prefix}〔{year}〕{number}号"
+        number = match.group(4)  # 4（跳过第3组"第"）
+        suffix = match.group(5)  # 号 或 期
+        return f"{prefix}〔{year}〕{number}{suffix}"
 
     return ""
 
