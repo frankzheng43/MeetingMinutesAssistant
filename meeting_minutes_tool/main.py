@@ -124,7 +124,7 @@ class Application:
     def _set_window_icon(self):
         """设置程序窗口图标（使用 icon.ico）"""
         try:
-            ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+            ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "icon.ico")
             if os.path.exists(ico_path):
                 # 1. iconbitmap 设置标题栏图标（Windows 桌面）
                 self.root.iconbitmap(default=ico_path)
@@ -580,7 +580,7 @@ class Application:
             return
 
         # 从 .ico 文件加载图片作为托盘图标
-        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+        ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "icon.ico")
         if os.path.exists(ico_path):
             image = Image.open(ico_path)
         else:

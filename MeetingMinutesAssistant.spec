@@ -3,9 +3,9 @@
 
 a = Analysis(
     ['meeting_minutes_tool\\main.py'],
-    pathex=[],
+    pathex=['meeting_minutes_tool'],
     binaries=[],
-    datas=[('meeting_minutes_tool\\icon.ico', '.')],
+    datas=[('meeting_minutes_tool\\resources\\icon.ico', '.')],
     hiddenimports=[
         # 应用模块
         'export_view', 'heatmap_view', 'statistics_view',
@@ -48,5 +48,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['meeting_minutes_tool\\icon.ico'],
+    icon=['meeting_minutes_tool\\resources\\icon.ico'],
 )
