@@ -29,3 +29,6 @@ Thumbs.db
 
 # Reasonix 技能配置
 .reasonix/
+
+# 文件名检查报告（本地生成）
+检查报告.md
