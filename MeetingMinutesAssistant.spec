@@ -10,6 +10,7 @@ a = Analysis(
         # 应用模块
         'export_view', 'heatmap_view', 'statistics_view',
         'watcher', 'excel_utils', 'llm_utils', 'ocr_utils',
+        '_stdlib_compat',  # 批量包含常用标准库模块
         # 第三方依赖（显式声明避免遗漏）
         'uuid', 'zoneinfo', 'copy', 'struct', 'json', 'hashlib',
         'shutil', 'csv', 'configparser', 'dataclasses',

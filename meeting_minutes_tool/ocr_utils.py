@@ -149,6 +149,20 @@ def _get_program_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _ensure_stdlib_path():
+    """
+    在 PyInstaller EXE 中补充系统 Python 的标准库路径
+    解决 PaddleOCR 等运行时加载的包需要各种 stdlib 模块的问题
+    """
+    if not (hasattr(sys, 'frozen') and getattr(sys, 'frozen', False)):
+        return  # 源码模式不需要
+
+    # sys.base_prefix 在 PyInstaller 中指向原始 Python 安装路径
+    lib_path = os.path.join(sys.base_prefix, 'Lib')
+    if os.path.isdir(lib_path) and lib_path not in sys.path:
+        sys.path.insert(0, lib_path)
+
+
 def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
     """
     确保 PaddleOCR 已下载到本地目录
@@ -160,6 +174,9 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
     """
     if log_func is None:
         log_func = logger.info
+
+    # 确保系统标准库可用（PyInstaller 可能漏掉部分模块）
+    _ensure_stdlib_path()
 
     if program_dir is None:
         program_dir = _get_program_dir()
