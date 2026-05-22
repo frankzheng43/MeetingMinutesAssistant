@@ -648,7 +648,6 @@ class Application:
 
     def _force_quit(self):
         """强制退出程序"""
-        import sys
         # 停止托盘图标
         if self.tray_icon is not None:
             try:

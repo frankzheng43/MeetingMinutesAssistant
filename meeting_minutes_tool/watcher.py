@@ -18,6 +18,10 @@ from datetime import datetime
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+# 延迟导入的模块（实际在函数中使用，提升到模块级别避免重复导入）
+from llm_utils import extract_minutes
+from excel_utils import append_records, delete_records_by_source, get_excel_path, restore_from_backup
+
 # 配置日志
 logger = logging.getLogger(__name__)
 
@@ -399,8 +403,6 @@ def _write_excel_with_retry(output_dir: str, record_number: str, items: list,
 
     :return: 是否写入成功
     """
-    from excel_utils import append_records
-
     for attempt in range(1, EXCEL_RETRY_MAX + 1):
         try:
             saved_path = append_records(
@@ -441,8 +443,6 @@ def _delete_excel_with_retry(output_dir: str, meeting_type_name: str,
 
     :return: 是否删除成功
     """
-    from excel_utils import delete_records_by_source
-
     for attempt in range(1, EXCEL_RETRY_MAX + 1):
         try:
             deleted = delete_records_by_source(
@@ -482,8 +482,6 @@ def process_single_pdf(pdf_path: str, config: dict, ocr_client, log_func,
     :param force_reprocess: 是否强制重新处理（忽略缓存）
     :return: 是否处理成功
     """
-    from llm_utils import extract_minutes
-
     def log(message: str, level: str = "info"):
         if log_func:
             log_func(message)
@@ -634,8 +632,6 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
     :param output_dir: Excel 输出目录
     :param stop_event: 停止事件，设置后尽快退出
     """
-    from llm_utils import extract_minutes
-
     def log(message: str, level: str = "info"):
         if log_func:
             log_func(message)
@@ -662,7 +658,6 @@ def initial_scan_and_process(watch_folder: str, config: dict, ocr_client,
         return
 
     # 检查 Excel 文件是否存在，如果不存在则尝试从缓存重建
-    from excel_utils import get_excel_path, restore_from_backup, append_records
     excel_path = get_excel_path(output_dir)
     if not os.path.exists(excel_path):
         log("Excel 文件不存在，尝试从缓存重建...")

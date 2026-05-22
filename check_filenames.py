@@ -165,9 +165,7 @@ for year in sorted(by_year.keys()):
     row.append(str(row_total))
     grand_total += row_total
     print("| " + " | ".join(row) + " |")
-print(f"| **合计** | **{by_year.get('合计', {}) or ''}" + "".join(f" | **{sum(by_year[y].get(t,0) for y in by_year)}**" for t in all_types) + f" | **{grand_total}** |")
-
-# 这里修复合计行
+# 合计行
 type_totals = {}
 for y in by_year:
     for t, c in by_year[y].items():

@@ -9,7 +9,6 @@ import os
 import re
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
@@ -252,8 +251,6 @@ class ExportView(tk.Frame):
         )
 
         # 默认导出路径 = 输出目录
-        if not self.export_path_var.get():
-            self.export_path_var.get()
         if not self.export_path_var.get():
             self.export_path_var.set(output_dir)
 
