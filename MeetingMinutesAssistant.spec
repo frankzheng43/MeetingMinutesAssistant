@@ -5,7 +5,7 @@ a = Analysis(
     ['meeting_minutes_tool\\main.py'],
     pathex=['meeting_minutes_tool'],
     binaries=[],
-    datas=[('meeting_minutes_tool\\resources\\icon.ico', '.')],
+    datas=[('meeting_minutes_tool\\resources\\icon.ico', 'resources')],
     hiddenimports=[
         # 应用模块
         'export_view', 'heatmap_view', 'statistics_view',

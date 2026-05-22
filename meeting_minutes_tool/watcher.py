@@ -905,14 +905,28 @@ def worker_loop(job_queue: queue.Queue, config: dict, log_func=None,
                 logger.warning(message)
 
     # 读取配置
-    api_key = config.get("api_key", "")
-    secret_key = config.get("secret_key", "")
     deepseek_key = config.get("deepseek_key", "")
     output_dir = config.get("output_dir", "")
     watch_folder = config.get("watch_folder", "")
+    ocr_engine = config.get("ocr_engine", "baidu")
 
-    if not all([api_key, secret_key, deepseek_key, output_dir, watch_folder]):
-        log("配置不完整，请检查所有配置项", "error")
+    # 校验公共必填项
+    missing = []
+    if not deepseek_key:
+        missing.append("DeepSeek Key")
+    if not output_dir:
+        missing.append("输出目录")
+    if not watch_folder:
+        missing.append("监听文件夹")
+    # 百度引擎需要 API Key
+    if ocr_engine == "baidu":
+        if not config.get("api_key"):
+            missing.append("百度 OCR AK")
+        if not config.get("secret_key"):
+            missing.append("百度 OCR SK")
+
+    if missing:
+        log(f"配置不完整：{'、'.join(missing)}", "error")
         return
 
     try:
