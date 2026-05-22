@@ -11,7 +11,7 @@ a = Analysis(
         'export_view', 'heatmap_view', 'statistics_view',
         'watcher', 'excel_utils', 'llm_utils', 'ocr_utils',
         # 第三方依赖（显式声明避免遗漏）
-        'uuid', 'copy', 'struct', 'json', 'hashlib',
+        'uuid', 'zoneinfo', 'copy', 'struct', 'json', 'hashlib',
         'shutil', 'csv', 'configparser', 'dataclasses',
         'numbers', 'decimal', 'pprint',
         'openpyxl',
