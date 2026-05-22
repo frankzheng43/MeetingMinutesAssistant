@@ -208,7 +208,7 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
                 break
 
         if returncode != 0:
-            log_func(f"❌ PaddleOCR 下载失败（退出码 {returncode}），请检查网络后重试")
+            log_func(f"[ERR]  PaddleOCR 下载失败（退出码 {returncode}），请检查网络后重试")
             return False
 
         if target_dir not in sys.path:
@@ -217,17 +217,17 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
         # 验证能导入
         try:
             import paddleocr
-            log_func(f"✅ PaddleOCR 下载完成（{_dir_size(target_dir)} MB）")
+            log_func(f"[OK]  PaddleOCR 下载完成（{_dir_size(target_dir)} MB）")
             return True
         except ImportError as e:
-            log_func(f"❌ PaddleOCR 下载后导入失败：{e}")
+            log_func(f"[ERR]  PaddleOCR 下载后导入失败：{e}")
             return False
 
     except subprocess.TimeoutExpired:
-        log_func("❌ PaddleOCR 下载超时（超过 10 分钟），请检查网络后重试")
+        log_func("[ERR]  PaddleOCR 下载超时（超过 10 分钟），请检查网络后重试")
         return False
     except Exception as e:
-        log_func(f"❌ PaddleOCR 下载异常：{e}")
+        log_func(f"[ERR]  PaddleOCR 下载异常：{e}")
         return False
 
 
