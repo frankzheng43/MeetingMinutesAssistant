@@ -112,8 +112,8 @@ class PaddleOCREngine(OcrEngine):
     def __init__(self, log_func=None):
         from paddleocr import PaddleOCR as _PaddleOCR
         self._log(f"正在加载 PaddleOCR 模型（首次加载需下载模型文件）...")
-        # use_angle_cls=True 启用文字方向分类，lang='ch' 中文模型
-        self._engine = _PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+        # lang='ch' 中文模型
+        self._engine = _PaddleOCR(lang='ch')
         self._log("PaddleOCR 加载完成")
 
     def _log(self, msg):
