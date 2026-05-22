@@ -178,15 +178,37 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
     log_func(f"下载目标：{target_dir}")
 
     try:
-        result = subprocess.run(
+        # 使用 Popen 实时输出下载进度
+        process = subprocess.Popen(
             [sys.executable, "-m", "pip", "install", "paddleocr",
              "--target", str(target_dir), "--no-warn-script-location"],
-            capture_output=True, text=True, timeout=600,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace",
         )
-        if result.returncode != 0:
-            stderr_tail = result.stderr[-500:] if result.stderr else ""
-            stdout_tail = result.stdout[-500:] if result.stdout else ""
-            log_func(f"❌ PaddleOCR 下载失败：{stderr_tail or stdout_tail}")
+
+        # 逐行读取并输出到日志
+        returncode = None
+        last_line = ""
+        while True:
+            line = process.stdout.readline()
+            if line:
+                line = line.rstrip()
+                if line:
+                    log_func(f"  {line}")
+                    last_line = line
+            if process.poll() is not None:
+                # 进程结束，读取剩余输出
+                for leftover in process.stdout.readlines():
+                    leftover = leftover.rstrip()
+                    if leftover:
+                        log_func(f"  {leftover}")
+                        last_line = leftover
+                returncode = process.returncode
+                break
+
+        if returncode != 0:
+            log_func(f"❌ PaddleOCR 下载失败（退出码 {returncode}），请检查网络后重试")
             return False
 
         if target_dir not in sys.path:
