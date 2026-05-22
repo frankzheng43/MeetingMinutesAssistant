@@ -256,6 +256,22 @@ class Application:
         )
         self.ds_entry.grid(row=row, column=1, sticky="ew", padx=(0, 5), pady=5)
 
+        # OCR 引擎选择
+        row = 5
+        tk.Label(config_frame, text="OCR 引擎：", width=14, anchor="e").grid(
+            row=row, column=0, sticky="e", padx=(0, 5), pady=5
+        )
+        self.ocr_engine_var = tk.StringVar(value=self.config.get("ocr_engine", "baidu"))
+        self.ocr_engine_combo = ttk.Combobox(
+            config_frame, textvariable=self.ocr_engine_var,
+            values=["baidu", "paddle"], state="readonly", width=20,
+        )
+        self.ocr_engine_combo.grid(row=row, column=1, sticky="w", padx=(0, 5), pady=5)
+        tk.Label(
+            config_frame, text="baidu=云端API  paddle=本地离线（首次使用自动下载）",
+            fg="#888888", font=("", 8),
+        ).grid(row=row, column=1, sticky="e", padx=(0, 5), pady=5)
+
         # 配置区域列权重
         config_frame.columnconfigure(1, weight=1)
 
@@ -395,6 +411,7 @@ class Application:
             "api_key": self.ak_var.get().strip(),
             "secret_key": self.sk_var.get().strip(),
             "deepseek_key": self.ds_var.get().strip(),
+            "ocr_engine": self.ocr_engine_var.get(),
         }
 
     def _save_config(self):
@@ -440,6 +457,7 @@ class Application:
             self.ak_var.set(imported_config.get("api_key", ""))
             self.sk_var.set(imported_config.get("secret_key", ""))
             self.ds_var.set(imported_config.get("deepseek_key", ""))
+            self.ocr_engine_var.set(imported_config.get("ocr_engine", "baidu"))
 
             # 更新内存配置
             self.config = imported_config
@@ -502,10 +520,11 @@ class Application:
             missing_fields.append("监听文件夹")
         if not config.get("output_dir"):
             missing_fields.append("输出目录")
-        if not config.get("api_key"):
-            missing_fields.append("百度 OCR AK")
-        if not config.get("secret_key"):
-            missing_fields.append("百度 OCR SK")
+        if config.get("ocr_engine", "baidu") == "baidu":
+            if not config.get("api_key"):
+                missing_fields.append("百度 OCR AK")
+            if not config.get("secret_key"):
+                missing_fields.append("百度 OCR SK")
         if not config.get("deepseek_key"):
             missing_fields.append("DeepSeek Key")
 

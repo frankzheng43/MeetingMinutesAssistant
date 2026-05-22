@@ -891,8 +891,7 @@ def worker_loop(job_queue: queue.Queue, config: dict, log_func=None,
     :param log_func: 日志回调函数
     :param stop_event: 停止事件
     """
-    # 导入依赖模块
-    from ocr_utils import BaiduOCR
+    from ocr_utils import create_ocr_engine
 
     def log(message: str, level: str = "info"):
         if log_func:
@@ -917,10 +916,11 @@ def worker_loop(job_queue: queue.Queue, config: dict, log_func=None,
         return
 
     try:
-        ocr_client = BaiduOCR(api_key, secret_key)
-        log("百度 OCR 客户端初始化成功")
+        ocr_client = create_ocr_engine(config, log_func=log)
+        engine_name = config.get("ocr_engine", "baidu")
+        log(f"OCR 引擎初始化成功（{engine_name}）")
     except Exception as e:
-        log(f"百度 OCR 客户端初始化失败: {e}", "error")
+        log(f"OCR 引擎初始化失败: {e}", "error")
         return
 
     # 创建临时图片输出目录
