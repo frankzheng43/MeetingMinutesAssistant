@@ -1080,25 +1080,34 @@ class WatcherService:
         self._running = True
         self._stop_event.clear()
 
+        log_func = self.log_func or logger.info
+
+        log_func("[DEBUG] WatcherService.start() - 确保监听文件夹存在")
         # 确保监听文件夹存在
         os.makedirs(self.folder, exist_ok=True)
+        log_func("[DEBUG] 监听文件夹检查完成")
 
         # 创建并启动文件系统监听器（递归监听子目录）
+        log_func("[DEBUG] 创建 Observer")
         event_handler = MonitorHandler(self.job_queue, self.folder)
         self.observer = Observer()
         self.observer.schedule(event_handler, self.folder, recursive=True)
+        log_func("[DEBUG] 启动 Observer")
         self.observer.start()
+        log_func("[DEBUG] Observer 已启动")
 
-        if self.log_func:
-            self.log_func(f"文件监听已启动，监听文件夹: {self.folder}")
+        log_func(f"文件监听已启动，监听文件夹: {self.folder}")
 
         # 创建并启动工作线程（非 daemon，确保能正确退出）
+        log_func("[DEBUG] 创建工作线程")
         self.worker_thread = threading.Thread(
             target=worker_loop,
-            args=(self.job_queue, self.config, self.log_func, self._stop_event),
+            args=(self.job_queue, self.config, log_func, self._stop_event),
             daemon=False,
         )
+        log_func("[DEBUG] 启动工作线程")
         self.worker_thread.start()
+        log_func("[DEBUG] 工作线程已启动")
 
         logger.info("WatcherService 已启动")
 

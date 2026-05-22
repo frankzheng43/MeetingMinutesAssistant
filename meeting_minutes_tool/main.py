@@ -538,30 +538,43 @@ class Application:
 
     def _start_monitor(self):
         """启动文件监控"""
+        logger.info("[DEBUG] _start_monitor 开始")
         config = self._get_config_from_ui()
+        logger.info("[DEBUG] 配置已读取")
 
         if not self._validate_config(config):
+            logger.info("[DEBUG] 配置验证失败")
             return
+
+        logger.info("[DEBUG] 配置验证通过")
 
         # 先保存配置
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
             self.config = config
+            logger.info("[DEBUG] 配置已保存")
         except Exception as e:
             logger.error(f"保存配置失败: {e}")
 
         try:
+            logger.info("[DEBUG] 开始导入 WatcherService")
             # 导入监控服务
             from watcher import WatcherService
+            logger.info("[DEBUG] WatcherService 导入完成")
 
             # 创建并启动监控服务
+            logger.info("[DEBUG] 开始创建 WatcherService 实例")
             self.watcher_service = WatcherService(
                 folder=config["watch_folder"],
                 config=config,
                 log_func=lambda msg: logger.info(msg),
             )
+            logger.info("[DEBUG] WatcherService 实例创建完成")
+
+            logger.info("[DEBUG] 开始调用 watcher_service.start()")
             self.watcher_service.start()
+            logger.info("[DEBUG] watcher_service.start() 返回")
 
             # 更新按钮状态
             self.start_btn.configure(state="disabled")
@@ -572,6 +585,8 @@ class Application:
 
         except Exception as e:
             logger.error(f"启动监控服务失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             messagebox.showerror("错误", f"启动监控服务失败：{e}")
 
     def _stop_monitor(self):
