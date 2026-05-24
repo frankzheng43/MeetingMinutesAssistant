@@ -11,6 +11,7 @@ a = Analysis(
         'export_view', 'heatmap_view', 'statistics_view',
         'watcher', 'excel_utils', 'llm_utils', 'ocr_utils',
         '_stdlib_compat',  # 批量包含常用标准库模块
+        'site',  # PyInstaller 默认排除，PaddleOCR 依赖链需要
         # 第三方依赖（显式声明避免遗漏）
         'uuid', 'zoneinfo', 'copy', 'struct', 'json', 'hashlib',
         'shutil', 'csv', 'configparser', 'dataclasses',
@@ -26,7 +27,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['runtime_hook_site.py'],
     excludes=[
         # PaddleOCR 运行时动态下载，不打包进 EXE
         'paddleocr', 'paddle', 'paddlex',

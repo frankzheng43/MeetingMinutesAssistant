@@ -8,6 +8,7 @@
 # 防止 PaddleOCR 等动态加载的包在运行时报 "No module named 'xxx'"
 
 # ---- 基础模块 ----
+import site
 import uuid
 import zoneinfo
 import symtable
