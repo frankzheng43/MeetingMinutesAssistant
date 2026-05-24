@@ -102,6 +102,10 @@ import imaplib
 import poplib
 import smtplib
 
+# ---- 测试 ----
+import unittest
+import unittest.mock
+
 # ---- 并发 ----
 import _thread
 import threading
