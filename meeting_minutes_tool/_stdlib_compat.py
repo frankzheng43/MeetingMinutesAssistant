@@ -13,6 +13,10 @@ import uuid
 import zoneinfo
 import symtable
 import ast
+import timeit
+import profile
+import pstats
+import cProfile
 import token
 import tokenize
 import compileall
