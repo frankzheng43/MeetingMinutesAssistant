@@ -110,7 +110,8 @@ class PaddleOCREngine(OcrEngine):
     """PaddleOCR 本地识别类"""
 
     def __init__(self, log_func=None):
-        from paddleocr import PaddleOCR as _PaddleOCR
+        import importlib
+        _PaddleOCR = importlib.import_module("paddleocr").PaddleOCR
         self._log(f"正在加载 PaddleOCR 模型（首次加载需下载模型文件）...")
         # lang='ch' 中文模型
         self._engine = _PaddleOCR(lang='ch')
@@ -183,21 +184,22 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
 
     target_dir = os.path.join(program_dir, PADDLE_DIRNAME)
 
-    # 检查是否已下载（通过检查 paddleocr 包是否存在）
-    marker = os.path.join(target_dir, "paddleocr", "__init__.py")
-    if os.path.exists(marker):
+    # 检查是否已下载（paddleocr + paddlepaddle 都存在才算就绪）
+    marker_ocr = os.path.join(target_dir, "paddleocr", "__init__.py")
+    marker_paddle = os.path.join(target_dir, "paddle", "__init__.py")
+    if os.path.exists(marker_ocr) and os.path.exists(marker_paddle):
         if target_dir not in sys.path:
             sys.path.insert(0, target_dir)
         log_func("PaddleOCR 依赖已就绪")
         return True
 
-    log_func("正在下载 PaddleOCR（首次使用需下载约 200MB 依赖，请耐心等待）...")
+    log_func("正在下载 PaddleOCR（首次使用需下载约 500MB 依赖，请耐心等待）...")
     log_func(f"下载目标：{target_dir}")
 
     try:
         # 使用 Popen 实时输出下载进度
         process = subprocess.Popen(
-            [sys.executable, "-m", "pip", "install", "paddleocr",
+            [sys.executable, "-m", "pip", "install", "paddlepaddle", "paddleocr",
              "--target", str(target_dir), "--no-warn-script-location"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,

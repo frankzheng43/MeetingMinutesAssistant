@@ -27,7 +27,20 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # PaddleOCR 运行时动态下载，不打包进 EXE
+        'paddleocr', 'paddle', 'paddlex',
+        # Paddle 的依赖链（太大）
+        'pandas', 'numpy', 'opencv_contrib_python',
+        'cv2', 'shapely', 'pyclipper', 'pypdfium2',
+        'modelscope', 'huggingface_hub',
+        'aistudio_sdk', 'bce_python_sdk',
+        'httpx', 'httpcore', 'anyio',
+        'pydantic', 'pydantic_core',
+        'ruamel', 'ruamel.yaml',
+        'networkx', 'protobuf',
+        'opt_einsum', 'safetensors',
+    ],
     noarchive=False,
     optimize=0,
 )
