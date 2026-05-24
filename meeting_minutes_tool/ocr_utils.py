@@ -199,8 +199,10 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
     try:
         # 使用 Popen 实时输出下载进度
         process = subprocess.Popen(
-            [sys.executable, "-m", "pip", "install", "paddlepaddle", "paddleocr",
-             "--target", str(target_dir), "--no-warn-script-location"],
+            [sys.executable, "-m", "pip", "install",
+             "paddlepaddle==3.2.0", "paddleocr",
+             "--target", str(target_dir), "--no-warn-script-location",
+             "--extra-index-url", "https://www.paddlepaddle.org.cn/packages/stable/cpu/"],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             text=True, encoding="utf-8", errors="replace",
