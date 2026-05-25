@@ -103,7 +103,7 @@ class BaiduOCR(OcrEngine):
 
 # ========== 下载目录 ==========
 
-_DEPS_DIRNAME = "paddle_deps"
+_DEPS_DIRNAME = "ocr_deps"
 
 
 def _get_program_dir() -> str:
