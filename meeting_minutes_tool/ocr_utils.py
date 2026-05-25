@@ -117,6 +117,9 @@ class PaddleOCREngine(OcrEngine):
 
         self._log = log_func or logger.info
 
+        # 禁用 PaddleX 模型源检测（无网络环境会超时）
+        os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+
         # Windows DLL 搜索路径（Python 3.8+ 需要）
         if hasattr(os, 'add_dll_directory'):
             for p in sys.path:
