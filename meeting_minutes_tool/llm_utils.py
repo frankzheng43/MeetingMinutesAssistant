@@ -241,43 +241,129 @@ def extract_publish_date_via_ai(ocr_text: str, api_key: str, meeting_type_name: 
         return ""
 
 
+def _extract_host(text: str) -> str:
+    """正则提取主持人"""
+    for pat in [
+        r'([\u4e00-\u9fff]{2,4})(?:书记|董事长|总经理)?\s*(?:主持|主持召开)',
+        r'由\s*([\u4e00-\u9fff]{2,4})\s*(?:同志)?\s*主持',
+    ]:
+        m = re.search(pat, text)
+        if m: return m.group(1)
+    return ''
+
+def _extract_date(text: str) -> str:
+    """正则提取会议日期"""
+    m = re.search(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日.*?(?:主持|召开)', text)
+    if m: return f'{m.group(1)}年{m.group(2)}月{m.group(3)}日'
+    m = re.search(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', text)
+    if m: return f'{m.group(1)}年{m.group(2)}月{m.group(3)}日'
+    return ''
+
+_ITEM_RE = r'(?:\n|^)\s*[（(]([一二三四五六七八九十]+)[)）](.+?)(?=\n\s*[（(](?:[一二三四五六七八九十]+)[)）]|\Z)'
+
+def _extract_items_party(text: str) -> list:
+    """正则提取党委会议题"""
+    sec = re.search(r'[一二三四五六七八九十][、，]\s*议定事项\s*\n(.+)', text, re.DOTALL)
+    if not sec:
+        sec = re.search(r'(?:纪要如下|达成一致意见)[：:。]\s*\n(.+)', text, re.DOTALL)
+    if not sec: return []
+    body = re.split(r'\n\s*[一二三四五六七八九十][、，]', sec.group(1))[0]
+    items = []
+    for m in re.finditer(_ITEM_RE, body, re.DOTALL):
+        content = m.group(2).strip()
+        if not content or len(content) < 15: continue
+        title = content.split('\n')[0].strip()
+        for end_word in ['事宜', '通知', '报告', '方案', '意见']:
+            idx = title.find(end_word)
+            if idx > 0: title = title[:idx+len(end_word)]; break
+        if len(title) > 60: title = title[:60] + '...'
+        items.append({'title': title, 'content': content})
+    return items
+
+def _extract_items_board(text: str) -> list:
+    """正则提取董事会议题"""
+    sec = re.search(r'(?:通过以下决议|审议通过以下\s*\w*\s*个议案)\s*[：:\n]', text)
+    if not sec: return []
+    body = text[sec.end():]
+    cn = r'[一二三四五六七八九十]'
+    items = []
+    for m in re.finditer(cn + r'+[、，]\s*(研究.+?)(?=' + cn + r'+[、，]|\Z)', body, re.DOTALL):
+        content = m.group(1).strip()
+        items.append({'title': content.split('\n')[0].strip()[:60], 'content': content})
+    return items
+
+def _extract_items_gm(text: str) -> list:
+    """正则提取总经办公会议题"""
+    body_match = re.search(r'(?:纪要如下|达成共识|会议精神纪要如下)[：:。\s]*\n(.+)', text, re.DOTALL)
+    body = body_match.group(1) if body_match else text
+    items = []
+    for m in re.finditer(_ITEM_RE, body, re.DOTALL):
+        content = m.group(2).strip()
+        if not content or len(content) < 10: continue
+        title = content.split('\n')[0].strip()
+        title = re.sub(r'^(?:研究|关于)', '', title).strip()
+        idx = title.find('的事宜')
+        if idx > 0: title = title[:idx+len('的事宜')]
+        items.append({'title': title, 'content': content})
+    return items
+
+
 def extract_minutes(ocr_text: str, api_key: str, filename: str = "") -> dict:
     """
-    调用 DeepSeek API 从 OCR 文本中提取会议纪要信息
+    从 OCR 文本中提取会议纪要信息
+    优先使用正则提取，失败后调用 DeepSeek API
 
     :param ocr_text: OCR 识别出的完整文本
-    :param api_key: DeepSeek API 密钥
-    :param filename: PDF文件名，用于自动检测会议类型
+    :param api_key: DeepSeek API 密钥（正则失败时使用）
+    :param filename: PDF文件名，用于检测会议类型
     :return: 包含 record_number, meeting_info, items, publish_date 的字典
     """
-    # 检测会议类型
     meeting_type = detect_meeting_type(filename)
     meeting_type_name = get_meeting_type_name(meeting_type)
     logger.info(f"检测到会议类型: {meeting_type_name} (类型代码: {meeting_type})")
 
-    # 优先从文件名正则提取纪要编号
+    # ==== 第一步：正则提取 ====
     record_number = extract_record_number_from_filename(filename)
-    if record_number:
-        logger.info(f"从文件名正则提取到纪要编号: {record_number}")
-    else:
-        logger.info("文件名正则未提取到纪要编号，将由 AI 从内容提取")
-
-    # 优先从 OCR 文本正则提取印发时间
     publish_date = extract_publish_date_from_text(ocr_text, meeting_type)
-    if publish_date:
-        logger.info(f"从 OCR 文本正则提取到印发时间: {publish_date}")
-    else:
-        logger.info("正则未提取到印发时间，将由 AI 提取")
+    host = _extract_host(ocr_text)
+    date = _extract_date(ocr_text)
 
-    # 获取对应的系统提示词
+    extractors = {
+        'party': _extract_items_party,
+        'board': _extract_items_board,
+        'gm': _extract_items_gm,
+    }
+    items = extractors.get(meeting_type, lambda x: [])(ocr_text)
+
+    # 构建会议信息
+    meeting_info = {}
+    if date:
+        meeting_info['date'] = date
+    if host:
+        meeting_info['presider'] = host
+
+    names = {'party': '党委会议', 'board': '董事会', 'gm': '总经理办公会议'}
+    if meeting_type in names:
+        meeting_info['meeting_name'] = names[meeting_type]
+
+    # 如果有议题，直接返回正则结果
+    if items and record_number:
+        logger.info(f"[正则] 提取成功：{len(items)} 个议题，纪要号={record_number}")
+        return {
+            "record_number": record_number,
+            "meeting_info": meeting_info,
+            "items": items,
+            "publish_date": publish_date,
+            "meeting_type": meeting_type,
+            "meeting_type_name": meeting_type_name,
+        }
+
+    logger.info("正则提取不完整，将调用 DeepSeek API 补充")
+
+    # ==== 第二步：DeepSeek API 兜底 ====
     system_prompt = get_system_prompt(meeting_type)
-
-    logger.info(f"开始调用 DeepSeek API 提取会议纪要信息 (类型: {meeting_type_name})")
-
-    # 拼接系统提示词和用户文本
     user_message = f"请从以下OCR文本中提取会议纪要信息：\n\n{ocr_text}"
 
-    # 构建请求数据
     payload = {
         "model": "deepseek-v4-flash",
         "temperature": 0.1,
@@ -294,7 +380,6 @@ def extract_minutes(ocr_text: str, api_key: str, filename: str = "") -> dict:
     }
 
     try:
-        # 调用 DeepSeek API
         response = requests.post(
             "https://api.deepseek.com/v1/chat/completions",
             headers=headers,
@@ -304,41 +389,45 @@ def extract_minutes(ocr_text: str, api_key: str, filename: str = "") -> dict:
         response.raise_for_status()
         result = response.json()
 
-        # 提取返回的文本内容
         if "choices" not in result or len(result["choices"]) == 0:
             logger.error("DeepSeek API 返回结果中没有 choices")
             return {"record_number": "", "meeting_info": {}, "items": [], "meeting_type": meeting_type}
 
         content = result["choices"][0]["message"]["content"]
-        logger.info(f"DeepSeek API 返回原始内容长度: {len(content)}")
-
-        # 尝试解析 JSON
+        logger.info(f"DeepSeek API 返回内容长度: {len(content)}")
         parsed_result = _parse_json_response(content)
 
-        # 如果文件名正则没提取到纪要编号，用 AI 提取的结果
+        # 合并正则和 AI 结果
         if not record_number:
             record_number = parsed_result.get("record_number", "")
-
-        # 如果正则没提取到印发时间，用 AI 提取
         if not publish_date:
             publish_date = extract_publish_date_via_ai(ocr_text, api_key, meeting_type_name)
 
-        # 添加会议类型信息
         parsed_result["meeting_type"] = meeting_type
         parsed_result["meeting_type_name"] = meeting_type_name
         parsed_result["record_number"] = record_number
         parsed_result["publish_date"] = publish_date
 
+        # 如果 AI 也没提取到议题，但正则提取到了，用正则的结果
+        if not parsed_result.get("items") and items:
+            parsed_result["items"] = items
+        if not parsed_result.get("meeting_info") and meeting_info:
+            parsed_result["meeting_info"] = meeting_info
+
         return parsed_result
 
-    except requests.RequestException as e:
-        logger.error(f"请求 DeepSeek API 异常: {e}")
-        return {"record_number": "", "meeting_info": {}, "items": [], "meeting_type": meeting_type}
-    except json.JSONDecodeError as e:
-        logger.error(f"解析 DeepSeek 返回 JSON 失败: {e}")
-        return {"record_number": "", "meeting_info": {}, "items": [], "meeting_type": meeting_type}
     except Exception as e:
-        logger.error(f"调用 DeepSeek API 发生未知错误: {e}")
+        logger.error(f"DeepSeek API 调用失败: {e}")
+        # API 失败但有正则结果，返回正则的
+        if items or record_number:
+            return {
+                "record_number": record_number,
+                "meeting_info": meeting_info,
+                "items": items,
+                "publish_date": publish_date,
+                "meeting_type": meeting_type,
+                "meeting_type_name": meeting_type_name,
+            }
         return {"record_number": "", "meeting_info": {}, "items": [], "meeting_type": meeting_type}
 
 
