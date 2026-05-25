@@ -207,7 +207,7 @@ def extract_publish_date_via_ai(ocr_text: str, api_key: str, meeting_type_name: 
     tail_text = ocr_text[-2000:] if len(ocr_text) > 2000 else ocr_text
 
     payload = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "temperature": 0.1,
         "max_tokens": 128,
         "messages": [
@@ -279,7 +279,7 @@ def extract_minutes(ocr_text: str, api_key: str, filename: str = "") -> dict:
 
     # 构建请求数据
     payload = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "temperature": 0.1,
         "max_tokens": 8192,
         "messages": [
