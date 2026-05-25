@@ -591,20 +591,33 @@ class Application:
 
     def _stop_monitor(self):
         """停止文件监控"""
-        if self.watcher_service:
+        if not self.watcher_service:
+            return
+
+        # 先禁用停止按钮，防止重复点击
+        self.stop_btn.configure(state="disabled")
+        self.stop_btn.configure(text="正在停止...")
+
+        def _do_stop():
+            """在后台线程中执行停止操作，不阻塞 GUI"""
             try:
                 self.watcher_service.stop()
                 self.watcher_service = None
 
-                # 更新按钮状态
-                self.start_btn.configure(state="normal")
-                self.stop_btn.configure(state="disabled")
-                self.save_btn.configure(state="normal")
-
-                logger.info("监控服务已停止")
+                # 回到主线程更新按钮
+                self.root.after(0, self._on_stop_complete)
             except Exception as e:
                 logger.error(f"停止监控服务失败: {e}")
-                messagebox.showerror("错误", f"停止监控服务失败：{e}")
+                self.root.after(0, lambda: messagebox.showerror("错误", f"停止监控服务失败：{e}"))
+
+        threading.Thread(target=_do_stop, daemon=True).start()
+
+    def _on_stop_complete(self):
+        """停止完成后在主线程更新界面"""
+        self.start_btn.configure(state="normal")
+        self.stop_btn.configure(text="停止监听", state="disabled")
+        self.save_btn.configure(state="normal")
+        logger.info("监控服务已停止")
 
     # ========== 系统托盘相关方法 ==========
 
