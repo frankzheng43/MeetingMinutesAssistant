@@ -31,6 +31,11 @@ a = Analysis(
     excludes=[
         # PaddleOCR 运行时动态下载，不打包进 EXE
         'paddleocr', 'paddle', 'paddlex',
+        # RapidOCR 运行时动态下载
+        'rapidocr', 'onnxruntime', 'omegaconf',
+        'antlr4_python3_runtime', 'antlr4',
+        'coloredlogs', 'humanfriendly', 'pyreadline3',
+        'flatbuffers', 'sympy', 'mpmath',
         # Paddle 的依赖链（太大）
         'pandas', 'numpy', 'opencv_contrib_python',
         'cv2', 'shapely', 'pyclipper', 'pypdfium2',

@@ -274,6 +274,109 @@ def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
         return False
 
 
+# ========== RapidOCR（本地，ONNX 推理） ==========
+
+class RapidOCREngine(OcrEngine):
+    """RapidOCR 本地识别类（基于 ONNX Runtime，轻量快速）"""
+
+    def __init__(self, log_func=None):
+        import importlib
+        import time
+        t0 = time.time()
+
+        self._log = log_func or logger.info
+
+        self._log("[DEBUG] 开始导入 rapidocr 模块...")
+        _RapidOCR = importlib.import_module("rapidocr").RapidOCR
+        self._log(f"[DEBUG] rapidocr 模块导入完成（{time.time()-t0:.1f}s）")
+
+        self._log("正在加载 RapidOCR 模型（首次自动下载约 15MB 模型文件）...")
+        t1 = time.time()
+        self._engine = _RapidOCR()
+        self._log(f"RapidOCR 模型加载完成（耗时 {time.time()-t1:.1f}s）")
+
+    def recognize(self, image_path: str) -> str:
+        import time
+        t0 = time.time()
+        logger.info(f"开始 RapidOCR 识别: {image_path}")
+        result = self._engine(image_path)
+        elapsed = time.time() - t0
+        if result.txts:
+            text = "\n".join(result.txts)
+            logger.info(f"RapidOCR 识别完成（耗时 {elapsed:.1f}s），{len(result.txts)} 行")
+            return text
+        logger.warning(f"RapidOCR 未识别到文字: {image_path}")
+        return ""
+
+
+# ========== 下载管理 ==========
+
+def _ensure_rapidocr_downloaded(program_dir: str = None, log_func=None) -> bool:
+    """确保 RapidOCR + onnxruntime 已安装（轻量，约 30MB）"""
+    if log_func is None:
+        log_func = logger.info
+
+    if program_dir is None:
+        program_dir = _get_program_dir()
+
+    target_dir = os.path.join(program_dir, PADDLE_DIRNAME)
+
+    # 检查是否已下载
+    marker = os.path.join(target_dir, "rapidocr", "__init__.py")
+    if os.path.exists(marker):
+        if target_dir not in sys.path:
+            sys.path.insert(0, target_dir)
+        log_func("RapidOCR 依赖已就绪")
+        return True
+
+    log_func("正在下载 RapidOCR + onnxruntime（约 30MB）...")
+    log_func(f"下载目标：{target_dir}")
+
+    try:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "pip", "install",
+             "rapidocr", "onnxruntime",
+             "--target", str(target_dir), "--no-warn-script-location"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace",
+        )
+
+        returncode = None
+        while True:
+            line = process.stdout.readline()
+            if line:
+                line = line.rstrip()
+                if line:
+                    log_func(f"  {line}")
+            if process.poll() is not None:
+                for leftover in process.stdout.readlines():
+                    leftover = leftover.rstrip()
+                    if leftover:
+                        log_func(f"  {leftover}")
+                returncode = process.returncode
+                break
+
+        if returncode != 0:
+            log_func(f"[ERR]  RapidOCR 下载失败（退出码 {returncode}）")
+            return False
+
+        if target_dir not in sys.path:
+            sys.path.insert(0, target_dir)
+
+        try:
+            import rapidocr
+            log_func(f"[OK]  RapidOCR 下载完成（{_dir_size(target_dir)} MB）")
+            return True
+        except ImportError as e:
+            log_func(f"[ERR]  RapidOCR 下载后导入失败：{e}")
+            return False
+
+    except Exception as e:
+        log_func(f"[ERR]  RapidOCR 下载异常：{e}")
+        return False
+
+
 def _dir_size(path: str) -> str:
     """计算目录大小（MB）"""
     total = 0
@@ -297,6 +400,11 @@ def create_ocr_engine(config: dict, log_func=None) -> OcrEngine:
     :return: OcrEngine 实例
     """
     engine_type = config.get("ocr_engine", "baidu")
+
+    if engine_type == "rapidocr":
+        if not _ensure_rapidocr_downloaded(log_func=log_func):
+            raise RuntimeError("RapidOCR 未就绪，请检查日志")
+        return RapidOCREngine(log_func=log_func)
 
     if engine_type == "paddle":
         if not ensure_paddle_downloaded(log_func=log_func):
