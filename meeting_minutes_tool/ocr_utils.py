@@ -111,18 +111,37 @@ class PaddleOCREngine(OcrEngine):
 
     def __init__(self, log_func=None):
         import importlib
+        import time
+        import os
+        t0 = time.time()
+
+        self._log = log_func or logger.info
+
+        # Windows DLL 搜索路径（Python 3.8+ 需要）
+        if hasattr(os, 'add_dll_directory'):
+            for p in sys.path:
+                dll_dir = os.path.join(p, 'paddle', 'libs')
+                if os.path.isdir(dll_dir):
+                    os.add_dll_directory(dll_dir)
+                    self._log(f"[DEBUG] 添加 DLL 搜索路径: {dll_dir}")
+                    break
+
+        self._log("[DEBUG] 开始导入 paddleocr 模块...")
         _PaddleOCR = importlib.import_module("paddleocr").PaddleOCR
-        self._log(f"正在加载 PaddleOCR 模型（首次加载需下载模型文件）...")
+        self._log(f"[DEBUG] paddleocr 模块导入完成（{time.time()-t0:.1f}s）")
+
+        self._log("正在加载 PaddleOCR 模型（首次约 1-3 分钟，后续秒开）...")
+        t1 = time.time()
         # lang='ch' 中文模型
         self._engine = _PaddleOCR(lang='ch')
-        self._log("PaddleOCR 加载完成")
-
-    def _log(self, msg):
-        logger.info(msg)
+        self._log(f"PaddleOCR 模型加载完成（耗时 {time.time()-t1:.1f}s）")
 
     def recognize(self, image_path: str) -> str:
         logger.info(f"开始 PaddleOCR 识别: {image_path}")
+        import time
+        t0 = time.time()
         result = self._engine.ocr(image_path, cls=True)
+        logger.info(f"PaddleOCR 识别完成（耗时 {time.time()-t0:.1f}s）")
         if not result or not result[0]:
             logger.warning(f"PaddleOCR 未识别到文字: {image_path}")
             return ""
