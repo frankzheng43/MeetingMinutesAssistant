@@ -264,11 +264,11 @@ class Application:
         self.ocr_engine_var = tk.StringVar(value=self.config.get("ocr_engine", "baidu"))
         self.ocr_engine_combo = ttk.Combobox(
             config_frame, textvariable=self.ocr_engine_var,
-            values=["baidu", "rapidocr", "paddle"], state="readonly", width=20,
+            values=["baidu", "rapidocr"], state="readonly", width=20,
         )
         self.ocr_engine_combo.grid(row=row, column=1, sticky="w", padx=(0, 5), pady=5)
         tk.Label(
-            config_frame, text="baidu=云端API  rapidocr=本地(推荐)  paddle=本地(需paddlepaddle)",
+            config_frame, text="baidu=云端API  rapidocr=本地(推荐,轻量快速)",
             fg="#888888", font=("", 8),
         ).grid(row=row, column=1, sticky="e", padx=(0, 5), pady=5)
 

@@ -27,11 +27,11 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=['runtime_hook_site.py'],
+    runtime_hooks=[],
     excludes=[
-        # PaddleOCR 运行时动态下载，不打包进 EXE
+        # OCR 引擎运行时动态下载，不打包进 EXE
         'paddleocr', 'paddle', 'paddlex',
-        # RapidOCR 运行时动态下载
+        'rapidocr', 'onnxruntime', 'omegaconf',
         'rapidocr', 'onnxruntime', 'omegaconf',
         'antlr4_python3_runtime', 'antlr4',
         'coloredlogs', 'humanfriendly', 'pyreadline3',

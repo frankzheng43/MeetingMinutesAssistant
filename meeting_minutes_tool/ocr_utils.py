@@ -101,177 +101,16 @@ class BaiduOCR(OcrEngine):
             raise
 
 
-# ========== PaddleOCR（本地） ==========
+# ========== 下载目录 ==========
 
-PADDLE_DIRNAME = "paddle_deps"
+_DEPS_DIRNAME = "paddle_deps"
 
-
-class PaddleOCREngine(OcrEngine):
-    """PaddleOCR 本地识别类"""
-
-    def __init__(self, log_func=None):
-        import importlib
-        import time
-        import os
-        t0 = time.time()
-
-        self._log = log_func or logger.info
-
-        # 禁用 PaddleX 模型源检测（无网络环境会超时）
-        os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
-
-        # Windows DLL 搜索路径（Python 3.8+ 需要）
-        if hasattr(os, 'add_dll_directory'):
-            for p in sys.path:
-                dll_dir = os.path.join(p, 'paddle', 'libs')
-                if os.path.isdir(dll_dir):
-                    os.add_dll_directory(dll_dir)
-                    self._log(f"[DEBUG] 添加 DLL 搜索路径: {dll_dir}")
-                    break
-
-        self._log("[DEBUG] 开始导入 paddleocr 模块...")
-        _PaddleOCR = importlib.import_module("paddleocr").PaddleOCR
-        self._log(f"[DEBUG] paddleocr 模块导入完成（{time.time()-t0:.1f}s）")
-
-        self._log("正在加载 PaddleOCR 模型（首次约 1-3 分钟，后续秒开）...")
-        t1 = time.time()
-        # lang='ch' 中文模型
-        self._engine = _PaddleOCR(lang='ch')
-        self._log(f"PaddleOCR 模型加载完成（耗时 {time.time()-t1:.1f}s）")
-
-    def recognize(self, image_path: str) -> str:
-        logger.info(f"开始 PaddleOCR 识别: {image_path}")
-        import time
-        t0 = time.time()
-        result = self._engine.ocr(image_path, cls=True)
-        logger.info(f"PaddleOCR 识别完成（耗时 {time.time()-t0:.1f}s）")
-        if not result or not result[0]:
-            logger.warning(f"PaddleOCR 未识别到文字: {image_path}")
-            return ""
-
-        # result 格式：[[[bbox, (text, confidence)], ...], ...]
-        lines = []
-        for page in result:
-            for line in page:
-                text = line[1][0]  # (text, confidence)
-                if text and text.strip():
-                    lines.append(text.strip())
-
-        full_text = "\n".join(lines)
-        logger.info(f"PaddleOCR 识别完成，共 {len(lines)} 行，文字长度: {len(full_text)}")
-        return full_text
-
-
-# ========== 下载管理 ==========
 
 def _get_program_dir() -> str:
     """获取程序所在目录（EXE 或源码目录）"""
     if hasattr(sys, 'frozen') and getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.executable))
-    # 源码模式：ocr_engine.py 所在目录的父目录
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def _ensure_stdlib_path():
-    """
-    在 PyInstaller EXE 中补充系统 Python 的标准库路径
-    解决 PaddleOCR 等运行时加载的包需要各种 stdlib 模块的问题
-    """
-    if not (hasattr(sys, 'frozen') and getattr(sys, 'frozen', False)):
-        return  # 源码模式不需要
-
-    # sys.base_prefix 在 PyInstaller 中指向原始 Python 安装路径
-    lib_path = os.path.join(sys.base_prefix, 'Lib')
-    if os.path.isdir(lib_path) and lib_path not in sys.path:
-        sys.path.insert(0, lib_path)
-
-
-def ensure_paddle_downloaded(program_dir: str = None, log_func=None) -> bool:
-    """
-    确保 PaddleOCR 已下载到本地目录
-    如果不存在则自动 pip install --target
-
-    :param program_dir: 程序根目录（默认自动检测）
-    :param log_func: 日志回调
-    :return: 是否就绪
-    """
-    if log_func is None:
-        log_func = logger.info
-
-    # 确保系统标准库可用（PyInstaller 可能漏掉部分模块）
-    _ensure_stdlib_path()
-
-    if program_dir is None:
-        program_dir = _get_program_dir()
-
-    target_dir = os.path.join(program_dir, PADDLE_DIRNAME)
-
-    # 检查是否已下载（paddleocr + paddlepaddle 都存在才算就绪）
-    marker_ocr = os.path.join(target_dir, "paddleocr", "__init__.py")
-    marker_paddle = os.path.join(target_dir, "paddle", "__init__.py")
-    if os.path.exists(marker_ocr) and os.path.exists(marker_paddle):
-        if target_dir not in sys.path:
-            sys.path.insert(0, target_dir)
-        log_func("PaddleOCR 依赖已就绪")
-        return True
-
-    log_func("正在下载 PaddleOCR（首次使用需下载约 500MB 依赖，请耐心等待）...")
-    log_func(f"下载目标：{target_dir}")
-
-    try:
-        # 使用 Popen 实时输出下载进度
-        process = subprocess.Popen(
-            [sys.executable, "-m", "pip", "install",
-             "paddlepaddle==3.2.0", "paddleocr",
-             "--target", str(target_dir), "--no-warn-script-location",
-             "--extra-index-url", "https://www.paddlepaddle.org.cn/packages/stable/cpu/"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True, encoding="utf-8", errors="replace",
-        )
-
-        # 逐行读取并输出到日志
-        returncode = None
-        last_line = ""
-        while True:
-            line = process.stdout.readline()
-            if line:
-                line = line.rstrip()
-                if line:
-                    log_func(f"  {line}")
-                    last_line = line
-            if process.poll() is not None:
-                # 进程结束，读取剩余输出
-                for leftover in process.stdout.readlines():
-                    leftover = leftover.rstrip()
-                    if leftover:
-                        log_func(f"  {leftover}")
-                        last_line = leftover
-                returncode = process.returncode
-                break
-
-        if returncode != 0:
-            log_func(f"[ERR]  PaddleOCR 下载失败（退出码 {returncode}），请检查网络后重试")
-            return False
-
-        if target_dir not in sys.path:
-            sys.path.insert(0, target_dir)
-
-        # 验证能导入
-        try:
-            import paddleocr
-            log_func(f"[OK]  PaddleOCR 下载完成（{_dir_size(target_dir)} MB）")
-            return True
-        except ImportError as e:
-            log_func(f"[ERR]  PaddleOCR 下载后导入失败：{e}")
-            return False
-
-    except subprocess.TimeoutExpired:
-        log_func("[ERR]  PaddleOCR 下载超时（超过 10 分钟），请检查网络后重试")
-        return False
-    except Exception as e:
-        log_func(f"[ERR]  PaddleOCR 下载异常：{e}")
-        return False
 
 
 # ========== RapidOCR（本地，ONNX 推理） ==========
@@ -319,7 +158,7 @@ def _ensure_rapidocr_downloaded(program_dir: str = None, log_func=None) -> bool:
     if program_dir is None:
         program_dir = _get_program_dir()
 
-    target_dir = os.path.join(program_dir, PADDLE_DIRNAME)
+    target_dir = os.path.join(program_dir, _DEPS_DIRNAME)
 
     # 检查是否已下载
     marker = os.path.join(target_dir, "rapidocr", "__init__.py")
@@ -405,11 +244,6 @@ def create_ocr_engine(config: dict, log_func=None) -> OcrEngine:
         if not _ensure_rapidocr_downloaded(log_func=log_func):
             raise RuntimeError("RapidOCR 未就绪，请检查日志")
         return RapidOCREngine(log_func=log_func)
-
-    if engine_type == "paddle":
-        if not ensure_paddle_downloaded(log_func=log_func):
-            raise RuntimeError("PaddleOCR 未就绪，请检查日志")
-        return PaddleOCREngine(log_func=log_func)
 
     # 默认百度 OCR
     api_key = config.get("api_key", "")
