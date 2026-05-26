@@ -84,17 +84,21 @@ def detect_meeting_type(filename: str) -> str:
     根据文件名检测会议类型
 
     :param filename: PDF文件名
-    :return: "party"（党委会）, "board"（董事会）, "gm"（总经办）, 或 "unknown"
+    :return: "party"（党委会）, "board"（董事会）, "gm"（总经办）,
+             "restruct"（重组整合领导小组）, "party_prep"（党委筹建领导小组）, 或 "unknown"
     """
     name_lower = filename.lower()
+    if "重组整合领导" in name_lower:
+        return "restruct"
+    if "党委筹建" in name_lower:
+        return "party_prep"
     if "党委" in name_lower:
         return "party"
-    elif "董事" in name_lower:
+    if "董事" in name_lower:
         return "board"
-    elif "总经办" in name_lower or "总经理" in name_lower:
+    if "总经办" in name_lower or "总经理" in name_lower:
         return "gm"
-    else:
-        return "unknown"
+    return "unknown"
 
 
 def get_system_prompt(meeting_type: str) -> str:
@@ -108,6 +112,8 @@ def get_system_prompt(meeting_type: str) -> str:
         "party": SYSTEM_PROMPT_PARTY,
         "board": SYSTEM_PROMPT_BOARD,
         "gm": SYSTEM_PROMPT_GM,
+        "restruct": SYSTEM_PROMPT_PARTY,
+        "party_prep": SYSTEM_PROMPT_PARTY,
     }
     return prompts.get(meeting_type, SYSTEM_PROMPT_PARTY)
 
@@ -118,6 +124,8 @@ def get_meeting_type_name(meeting_type: str) -> str:
         "party": "党委会",
         "board": "董事会",
         "gm": "总经办",
+        "restruct": "重组整合工作领导小组",
+        "party_prep": "党委筹建领导小组",
         "unknown": "未知类型",
     }
     return names.get(meeting_type, "未知类型")
